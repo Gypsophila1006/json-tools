@@ -1,103 +1,213 @@
-import Image from "next/image";
+"use client";
+import React, { useState } from "react";
+import {
+  ChakraProvider,
+  Box,
+  Flex,
+  Button,
+  IconButton,
+  Textarea,
+  HStack,
+  Heading,
+  Select,
+  Spacer,
+} from "@chakra-ui/react";
+import { SunIcon, MoonIcon, CopyIcon, DeleteIcon } from "@chakra-ui/icons";
+import dynamic from "next/dynamic";
+import beautify from "js-beautify";
+const ReactJson = dynamic(() => import("react-json-view"), { ssr: false });
+
+// 动态加载 Monaco Editor，避免 SSR 问题
+const MonacoEditor = dynamic(
+  () => import("@monaco-editor/react").then((mod) => mod.default),
+  { ssr: false }
+);
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.js
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [input, setInput] = useState("");
+  const [output, setOutput] = useState("");
+  const [resultType, setResultType] = useState("beautify");
+  const [viewMode, setViewMode] = useState("tree"); // "tree" or "text"
+  const [treeCollapsed, setTreeCollapsed] = useState(false); // false: 全部展开, 1: 全部折叠到一级
+  const [showLineNumbers, setShowLineNumbers] = useState(false); // 控制是否显示行号
+  // 移除 showTree 相关内容
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+  // 格式化/美化
+  const handleBeautify = () => {
+    try {
+      const obj = JSON.parse(input);
+      const pretty = beautify(JSON.stringify(obj), { indent_size: 2 });
+      setOutput(pretty);
+      setResultType("beautify");
+      setViewMode("tree");
+      setTreeCollapsed(false); // 全部展开
+    } catch (e) {
+      alert("JSON 格式错误: " + e.message);
+    }
+  };
+
+  // 压缩/最小化
+  const handleMinify = () => {
+    try {
+      const obj = JSON.parse(input);
+      const minified = JSON.stringify(obj);
+      setOutput(minified);
+      setResultType("minify");
+      setViewMode("text");
+    } catch (e) {
+      alert("JSON 格式错误: " + e.message);
+    }
+  };
+
+  // 校验
+  const handleValidate = () => {
+    try {
+      JSON.parse(input);
+      alert("JSON 校验通过");
+    } catch (e) {
+      alert("JSON 校验失败: " + e.message);
+    }
+  };
+
+  // 复制结果
+  const handleCopy = () => {
+    if (!output) return;
+    navigator.clipboard.writeText(output);
+    // alert("已复制到剪贴板"); // 移除成功弹窗
+  };
+
+  // 清空
+  const handleClear = () => {
+    setInput("");
+    setOutput("");
+  };
+
+  // Monaco Editor 配置
+  const editorOptions = {
+    selectOnLineNumbers: true,
+    minimap: { enabled: false },
+    fontSize: 16,
+    wordWrap: "on",
+    scrollBeyondLastLine: false,
+    automaticLayout: true,
+  };
+
+  return (
+    <Box minH="100vh" bg="gray.50"> 
+        {/* 顶部栏 */}
+        <Flex as="header" align="center" px={6} py={4} boxShadow="md" bg="white"> 
+          <Heading size="md" letterSpacing="wide">JSON 在线工具箱</Heading>
+          <Spacer />
+          <IconButton
+            aria-label="切换深色模式"
+            icon={<SunIcon />}
+            variant="ghost"
+            size="md"
+            ml={2}
+            isDisabled
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+        </Flex>
+
+        {/* 主体区域 */}
+        <Flex direction={{ base: "column", md: "row" }} px={{ base: 2, md: 8 }} py={6} gap={6}>
+          {/* 左侧编辑区 */}
+          <Box flex={1} minW={{ base: "100%", md: "50%" }} display="flex" flexDirection="column">
+            <Box mb={2} fontWeight="bold">JSON 输入区</Box>
+            <Box flex={1} borderRadius="md" overflow="hidden" borderWidth={1} borderColor="gray.200" minH="400px"> 
+              <MonacoEditor
+                height="400px"
+                language="json"
+                value={input}
+                options={editorOptions}
+                onChange={(value) => setInput(value || "")}
+                theme="vs-light"
+              />
+            </Box>
+            <HStack mt={3} spacing={2}>
+              <Button colorScheme="blue" onClick={handleBeautify}>格式化/美化</Button>
+              <Button colorScheme="teal" onClick={handleMinify}>压缩/最小化</Button>
+              <Button colorScheme="purple" onClick={handleValidate}>校验</Button>
+              <Button leftIcon={<DeleteIcon />} onClick={handleClear} variant="outline">清空</Button>
+            </HStack>
+          </Box>
+
+          {/* 右侧结果区 */}
+          <Box flex={1} minW={{ base: "100%", md: "50%" }}>
+            <Box mb={2} fontWeight="bold">结果区</Box>
+            <Box borderRadius="md" overflow="hidden" borderWidth={1} borderColor="gray.200" minH="400px" bg="white" p={4} display="flex" flexDirection="column" gap={4}> 
+              {/* 结果区内容根据 viewMode 切换 */}
+              {viewMode === "tree" && (
+                <Box height="360px" overflowY="auto" overflowX="auto" style={{ whiteSpace: "pre" }}>
+                  {(() => {
+                    try {
+                      if (!output) return null;
+                      const data = JSON.parse(output);
+                      return (
+                        <ReactJson
+                          src={data}
+                          name={null}
+                          collapsed={treeCollapsed}
+                          enableClipboard={false}
+                          displayDataTypes={false}
+                          displayObjectSize={false}
+                          style={{ fontSize: 16 }}
+                          theme="rjv-default"
+                        />
+                      );
+                    } catch {
+                      return null;
+                    }
+                  })()}
+                </Box>
+              )}
+              {viewMode === "text" && (
+                <MonacoEditor
+                  height="360px"
+                  language="json"
+                  value={output}
+                  options={{
+                    readOnly: true,
+                    lineNumbers: "on",
+                    fontSize: 16,
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    wordWrap: "on",
+                    automaticLayout: true,
+                  }}
+                  theme="vs-light"
+                />
+              )}
+            </Box>
+            {/* 视图切换和折叠按钮 */}
+            <Box mt={2} display="flex" gap={2}>
+              <Button size="sm" colorScheme={viewMode === "tree" ? "blue" : "gray"} onClick={() => setViewMode("tree")}>树形视图</Button>
+              <Button size="sm" colorScheme={viewMode === "text" ? "blue" : "gray"} onClick={() => setViewMode("text")}>代码视图</Button>
+              {viewMode === "tree" && (
+                <Button size="sm" onClick={() => setTreeCollapsed(treeCollapsed === false ? true : false)}>
+                  {treeCollapsed === false ? "全部折叠" : "全部展开"}
+                </Button>
+              )}
+            </Box>
+            <HStack mt={3} spacing={2}>
+              <Button leftIcon={<CopyIcon />} colorScheme="green" onClick={handleCopy} isDisabled={!output}>复制结果</Button>
+              {/* 预留更多功能按钮 */}
+              <Select width="180px" placeholder="更多功能 (开发中)" isDisabled>
+                <option value="escape">JSON 转义</option>
+                <option value="unescape">JSON 反转义</option>
+                <option value="sort">JSON 排序</option>
+                <option value="to-code">转多语言代码</option>
+                <option value="to-csv">转 CSV/Excel</option>
+                <option value="to-yaml">JSON &lt;-&gt; YAML</option>
+                <option value="to-xml">JSON &lt;-&gt; XML</option>
+              </Select>
+            </HStack>
+          </Box>
+        </Flex>
+
+        {/* 页脚 */}
+        <Box as="footer" textAlign="center" py={4} color="gray.500" fontSize="sm">
+          © {new Date().getFullYear()} JSON 工具箱 | Powered by Next.js & Chakra UI
+        </Box>
+      </Box>
   );
 }
